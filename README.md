@@ -13,7 +13,7 @@ This allows for same set of codes when working on both platforms.
 ## Install
 
 1. Download or build from source Zipper module.
-2. If on Mac, Create a folder and subfolder “me.richboy.module.zipper/1.0.0” in /Library/Application Support/Titanium/modules/android and then drop the ‘zipper.jar’ file inside the “1.0.0” subfolder.
+2. If on Mac, Create a folder and subfolder “me.richboy.module.zipper/1.0.0” in /Library/Application Support/Titanium/modules/android and then drop the ‘zipper.jar’ file from the ‘dist’ directory inside the ‘1.0.0’ subfolder.
 
 ## How to use
 
