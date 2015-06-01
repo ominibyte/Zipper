@@ -1,0 +1,9 @@
+bin
+build
+tmp
+*.zip
+.apt_generated
+.classpath
+.project
+.settings
+*.class

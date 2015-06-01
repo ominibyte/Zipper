@@ -1,0 +1,18 @@
+#
+# this is your module manifest and used by Titanium
+# during compilation, packaging, distribution, etc.
+#
+version: 1.0.0
+apiversion: 2
+architectures: armeabi armeabi-v7a x86
+description: A utility tool for zipping and unzipping files for Android in Appcelerator Titanium
+author: Richboy
+license: Apache Public License
+copyright: Copyright (c) 2015 by Richboy
+
+# these should not be edited
+name: zipper
+moduleid: me.richboy.module.zipper
+guid: 624086a7-6bba-45a4-a435-eb0553cea20b
+platform: android
+minsdk: 4.0.0.RC4
