@@ -11,11 +11,14 @@ package me.richboy.module.zipper;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 
 import org.appcelerator.kroll.KrollDict;
 import org.appcelerator.kroll.KrollFunction;
@@ -36,14 +39,18 @@ public class ZipperModule extends KrollModule
 	// Standard Debugging variables
 	private static final String LCAT = "ZipperModule";
 	private static final boolean DBG = TiConfig.LOGD;
+	
+	//Module working properties and callbacks
 	private KrollFunction successFunction, errorFunction, progressFunction;
 	private ArrayList<Object> fileList;
-	private HashMap<String, String> errorMap;
+	private HashMap<String, String> errorMap, zipSuccessMap;
 	private HashMap<String, Double> progressMap;
 	private HashMap<String, Object[]> successMap;
 	private String source, dest;
 	private boolean async;
 	private boolean overwrite;
+	private ArrayList<File> toZip;
+	private boolean inclusive;
 
 	// You can define constants with @Kroll.constant, for example:
 	// @Kroll.constant public static final String EXTERNAL_NAME = value;
@@ -51,12 +58,25 @@ public class ZipperModule extends KrollModule
 	public ZipperModule()
 	{
 		super();
+		//clear content from previous processes
+		reset();
+	}
+	
+	private void reset(){
 		fileList = new ArrayList<Object>();
 		errorMap = new HashMap<String, String>();
+		zipSuccessMap = new HashMap<String, String>();
 		successMap = new HashMap<String, Object[]>();
 		progressMap = new HashMap<String, Double>();
 		async = false;
 		overwrite = true;
+		toZip = new ArrayList<File>();
+		inclusive = true;
+		source = null;
+		dest = null;
+		successFunction = null;
+		errorFunction = null;
+		progressFunction = null;
 	}
 
 	@Kroll.onAppCreate
@@ -70,6 +90,9 @@ public class ZipperModule extends KrollModule
 	public void processProperties(KrollDict properties) {
 		super.processProperties(properties);
 		
+		//clear content from previous processes
+		reset();
+		
 		if( properties.containsKey("success") )
 			successFunction = (KrollFunction) properties.get("success");
 		if( properties.containsKey("error") )
@@ -80,24 +103,20 @@ public class ZipperModule extends KrollModule
 			async = TiConvert.toBoolean(properties.get("async"));
 		if( properties.containsKey("overwrite") )
 			async = TiConvert.toBoolean(properties.get("overwrite"));
+		if( properties.containsKey("inclusive") )
+			inclusive = TiConvert.toBoolean(properties.get("inclusive"));
 		
 		if( properties.containsKey("file") )
 			source = TiConvert.toString(properties.get("file"));
 		else{
-			errorMap.put("message", "Source File MUST be specified");
-			errorMap.put("errorStack", "");
-			if( errorFunction != null )
-				errorFunction.callAsync(getKrollObject(), errorMap);
+			sendError("Source File MUST be specified", "");
 			return;
 		}
 		
 		if( properties.containsKey("target") )
 			dest = TiConvert.toString(properties.get("target"));
 		else{
-			errorMap.put("message", "Destination Target Directory MUST be specified");
-			errorMap.put("errorStack", "");
-			if( errorFunction != null )
-				errorFunction.callAsync(getKrollObject(), errorMap);
+			sendError("Destination Target Directory MUST be specified", "");
 			return;
 		}
 	}
@@ -109,14 +128,121 @@ public class ZipperModule extends KrollModule
 		processProperties(properties);
 		
 		if(async){
-			new Thread(new ZipperRunner()).start();
+			new Thread(new ZipperRunner(ZipMode.UNZIP)).start();
 		}
 		else
-			new ZipperRunner().run();
+			new ZipperRunner(ZipMode.UNZIP).run();
+	}
+	
+	// Methods
+	@Kroll.method
+	public boolean addFile(String path)
+	{
+		File file = new File(Uri.parse(path).getPath());
+		
+		if( file.exists() ){
+			toZip.add(file);
+			return true;
+		}
+		else
+			return false;
+	}
+	
+	// Methods
+	@Kroll.method
+	public boolean emptyQueue(){
+		toZip.clear();
+		return true;
+	}
+	
+	// Methods
+	@Kroll.method
+	public void zip(KrollDict properties)
+	{
+		processProperties(properties);
+		
+		//check if queue is empty
+		if( toZip.isEmpty() ){
+			sendError("No file to Zip", "");
+			return;
+		}
+		
+		startZipping();
+	}
+	
+	// Methods
+	@Kroll.method
+	public void zipDirectory(KrollDict properties)
+	{
+		processProperties(properties);
+		
+		//check for directory and if it exists
+		if( properties.containsKey("directory") ){
+			//check if it exists
+			File dir = new File(Uri.parse(TiConvert.toString(properties.get("directory"))).getPath());
+			if( !dir.exists() ){
+				sendError("The directory - " + dir.getAbsolutePath() + " does NOT exist!", "");
+				return;
+			}
+			
+			//check if it a directory
+			if( !dir.isDirectory() ){
+				sendError("The file - " + dir.getAbsolutePath() + " is NOT a directory!", "");
+				return;
+			}
+			
+			//clear queue
+			toZip.clear();
+			
+			if( inclusive )//if inclusive, add the folder to the queue
+				toZip.add(dir);
+			else{//add all the files in that folder to the zip
+				File[] files = dir.listFiles();
+				toZip.addAll(Arrays.asList(files));
+			}
+		}
+		else{
+			sendError("Directory to Zip MUST be supplied", "");
+			return;
+		}
+		
+		startZipping();
+	}
+	
+	private void sendError(String message, String stack){
+		errorMap.put("message", message);
+		errorMap.put("errorStack", stack);
+		if( errorFunction != null )
+			errorFunction.callAsync(getKrollObject(), errorMap);
+	}
+	
+	private void startZipping(){
+		if(async){
+			new Thread(new ZipperRunner(ZipMode.ZIP)).start();
+		}
+		else
+			new ZipperRunner(ZipMode.ZIP).run();
 	}
 	
 	private class ZipperRunner implements Runnable{
+		private ZipMode mode;
+		private int total;
+		private int done;
+		
+		public ZipperRunner(ZipMode mode){
+			this.mode = mode;
+			total = 0;
+			done = 0;
+		}
+		
 		public void run(){
+			if( mode == ZipMode.UNZIP )
+				unzip();
+			else
+				zip();
+		}
+		
+		public void unzip(){
 			if(DBG)
 				Log.i(LCAT, "source sent was: " + source);
 			try{
@@ -126,20 +252,14 @@ public class ZipperModule extends KrollModule
 				if( !file.exists() ){
 					if(DBG)
 						Log.e(LCAT, "Source File - " + file.getAbsolutePath() + " does NOT exist");
-					errorMap.put("message", "Source File - " + file.getAbsolutePath() + " does NOT exist");
-					errorMap.put("errorStack", "");
-					if( errorFunction != null )
-						errorFunction.callAsync(getKrollObject(), errorMap);
+					sendError("Source File - " + file.getAbsolutePath() + " does NOT exist", "");
 					return;
 				}
 				
 				if( destFile.getParentFile() == null && !destFile.exists() ){
 					if(DBG)
-						Log.e(LCAT, "Destination file - "+ destFile.getAbsolutePath() +" is not writtable");
-					errorMap.put("message", "Destination file - "+ destFile.getAbsolutePath() +" is not writtable");
-					errorMap.put("errorStack", "");
-					if( errorFunction != null )
-						errorFunction.callAsync(getKrollObject(), errorMap);
+						Log.e(LCAT, "Destination file - "+ destFile.getAbsolutePath() +" is not writable");
+					sendError("Destination file - "+ destFile.getAbsolutePath() +" is not writable", "");
 					return;
 				}
 				
@@ -209,12 +329,143 @@ public class ZipperModule extends KrollModule
 				if( DBG )
 					Log.e(LCAT, "Error: " + errorMessage);
 				
-				errorMap.put("message", e.getMessage());
-				errorMap.put("errorStack", errorMessage);
-				if( errorFunction != null )
-					errorFunction.callAsync(getKrollObject(), errorMap);
+				sendError(e.getMessage(), errorMessage);
+			}
+		}
+		
+		public void zip(){
+			//check if a file exists before adding to the zip so that it doesn't crash the app. 
+			//It could be the case that one or more files may have been deleted on another end of the App before the zip method was called
+			
+			//all root files would be copied to the root directory irrespective of their location. 
+			//All sub-directories would inherit from their parent
+			
+			//count all files for progress calculation
+			total = countFiles(toZip.toArray(new File[0]));
+			
+			if( total == 0 ){//no file exists. user is probably attempting to add an empty folder which we have to refuse :)
+				sendError("Sorry, no file was found to add. Empty folders are NOT supported", "");
+				return;
+			}
+			
+			File targetZip = null;
+			
+			try{
+				//check if a destination file path was supplied
+				if( dest == null ){
+					targetZip = File.createTempFile("Zipper", ".zip");
+				}
+				else{
+					//check that the parent folder exists
+					File destFile = new File(Uri.parse(dest).getPath());
+					if( destFile.getParentFile() == null || !destFile.getParentFile().exists() ){
+						if(DBG)
+							Log.e(LCAT, "Destination file - "+ destFile.getAbsolutePath() +" is not writable");
+						sendError("Destination file - "+ destFile.getAbsolutePath() +" is not writable", "");
+						return;
+					}
+					targetZip = destFile;
+				}
+				
+				//delete file if it exists
+				if( targetZip.exists() )
+					targetZip.delete();
+				if( !targetZip.exists() )
+					targetZip.createNewFile();
+				
+				FileOutputStream fos = new FileOutputStream(targetZip);
+				ZipOutputStream zos = new ZipOutputStream(fos);
+				
+				for( File file: toZip ){
+					if( file.isDirectory() ){
+						File[] files = file.listFiles();
+						for( File f : files )
+							zipHelper(f, file.getName(), zos);
+					}
+					else{//add file
+						zipHelper(file, "", zos);
+					}
+				}
+				
+				zos.close();
+				
+				//this is done in case there was a file which was not found during the zipping process. It forces 100% progress at the end
+				done = total;
+				
+				//send progress
+				progressMap.put("progress", (double) done / (double) total);
+				progressFunction.callAsync(getKrollObject(), progressMap);
+				
+				//send success message
+				zipSuccessMap.put("file", targetZip.getAbsolutePath());
+				if( successFunction != null )
+					successFunction.callAsync(getKrollObject(), zipSuccessMap);
+			}
+			catch(Exception e){
+				//send error message
+				String errorMessage = "Error: ";
+				for( StackTraceElement elem : e.getStackTrace() )
+					errorMessage += "\n" + elem.toString();
+				
+				if( DBG )
+					Log.e(LCAT, "Error: " + errorMessage);
+				
+				sendError(e.getMessage(), errorMessage);
+			}
+		}
+		
+		private void zipHelper(File toCopy, String parentPath, ZipOutputStream zos) throws IOException{
+			if( !toCopy.exists() ){//check that file still exists
+				done++;
+				
+				//send progress
+				progressMap.put("progress", (double) done / (double) total);
+				progressFunction.callAsync(getKrollObject(), progressMap);
+				return;
+			}
+			
+			if( toCopy.isDirectory() ){
+				File[] files = toCopy.listFiles();
+				for( File f : files )
+					zipHelper(f, parentPath + File.separator + toCopy.getName(), zos);
+			}
+			else{
+				byte[] buffer = new byte[1024];
+				
+				String fullPath = parentPath.isEmpty() ? toCopy.getName() : parentPath + File.separator + toCopy.getName();
+				ZipEntry ze = new ZipEntry(fullPath);
+				zos.putNextEntry(ze);
+				
+				FileInputStream fis = new FileInputStream(toCopy);
+				int len;
+				while( (len = fis.read(buffer)) > 0 ){
+					zos.write(buffer, 0, len);
+				}
+				fis.close();
+				zos.closeEntry();
+				
+				done++;
+				
+				//send progress
+				progressMap.put("progress", (double) done / (double) total);
+				progressFunction.callAsync(getKrollObject(), progressMap);
 			}
 		}
 	}
+	
+	private int countFiles(File[] files){
+		int count = 0;
+		for( File f : files ){
+			if( f.isDirectory() )
+				count += countFiles(f.listFiles());
+			else
+				count++;
+		}
+		
+		return count;
+	}
+	
+	private enum ZipMode{
+		ZIP, UNZIP
+	}
 }
-
