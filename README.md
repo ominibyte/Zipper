@@ -39,9 +39,11 @@ Put this into your code :
 USAGE
 -------------
 See example/zip.js for examples on zipping
+
 See example/unzip.js for example on unzipping
 
 ABOUT ME
 -------
 Learn more at http://richboy.me
+
 Contact me via richboy [at] ratelsoft dot com for any issues or suggestion
