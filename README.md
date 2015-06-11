@@ -3,7 +3,7 @@ A Zip/Unzip Module for Appcelerator Titanium
 
 DESCRIPTION
 ------------
-This module allows you to unzip files within titanium.
+This module allows you to zip and/or unzip files within titanium.
 
 
 Built to be the Android port of the iPhone module - https://github.com/mpociot/titanium-mobile-zip-module which was built by Marcel Pociot with same callback and properties. However, I Added a new property - async which allows for asynchronous operations (if set to true).
