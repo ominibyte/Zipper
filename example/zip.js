@@ -19,7 +19,7 @@ zipper.addFile("file:////sdcard/folder_name");//works with the file:// URL proto
 
 //call the zip method to zip all queued files added via the addFile method
 zipper.zip({
-	target: tempDir.resolve(),//[optional] the zip file which should be created. File may not exist but the parent directory MUST. If file already exists, it would be overwritten
+	target: someZipFile.resolve(),//[optional] the zip file which should be created. File may not exist but the parent directory MUST. If file already exists, it would be overwritten
 	async: true,//default is false
 	success: function(e){
 		Ti.API.info("process completed sucessfully");
@@ -46,8 +46,8 @@ zipper.emptyQueue();
 //Note that any previous queue is deleted when this is called
 
 zipper.zipDirectory({
-	directory: tempFile.resolve(),//The directory to Zip
-	target: tempDir.resolve(),//[optional] the zip file which should be created. File may not exist but the parent directory MUST. If file already exists, it would be overwritten
+	directory: someDir.resolve(),//The directory to Zip
+	target: someZipFile.resolve(),//[optional] the zip file which should be created. File may not exist but the parent directory MUST. If file already exists, it would be overwritten
 	inclusive: true,//Should the directory itself be inclusive in the zip or just the files inside. default is true
 	async: true,//default is false
 	success: function(e){
