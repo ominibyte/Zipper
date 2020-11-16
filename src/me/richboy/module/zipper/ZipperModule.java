@@ -102,7 +102,7 @@ public class ZipperModule extends KrollModule
 		if( properties.containsKey("async") )
 			async = TiConvert.toBoolean(properties.get("async"));
 		if( properties.containsKey("overwrite") )
-			async = TiConvert.toBoolean(properties.get("overwrite"));
+			overwrite = TiConvert.toBoolean(properties.get("overwrite"));
 		if( properties.containsKey("inclusive") )
 			inclusive = TiConvert.toBoolean(properties.get("inclusive"));
 		
